@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 // wa_subscribe_all_webhooks.php
 // Открой в браузере: https://yourdomain/wa_subscribe_all_webhooks.php
 // 1) Получает APP_TOKEN через OAuth (client_credentials) из APP_ID + APP_SECRET

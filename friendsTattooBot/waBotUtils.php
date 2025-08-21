@@ -1,16 +1,12 @@
-<?php
+<?php declare(strict_types=1);
+
+require_once __DIR__ . '/waLogDebug.php';
+require_once __DIR__ . '/waConfig.php';
 
 /**
  * ----- БАЗОВЫЕ УТИЛИТЫ -----
  */
-function bu_log(string $file, $data): void
-{
-    $dir = dirname($file);
-    if (!is_dir($dir))
-        @mkdir($dir, 0775, true);
-    $row = ['time' => date('c'), 'data' => $data];
-    @file_put_contents($file, json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND);
-}
+
 
 /** Нормализация телефона: цифры (Cloud API допускает без '+') */
 function bu_msisdn(string $phone): string
@@ -18,23 +14,45 @@ function bu_msisdn(string $phone): string
     return preg_replace('~\D+~', '', $phone);
 }
 
-/**
- * Анти-дубликаты: хранит "уже видели" id в /logs/seen на TTL часов (24ч по умолчанию)
- * Возвращает TRUE, если id уже видели недавно; FALSE — если это первое появление (и сразу помечает).
- */
-function bu_seen_event(string $id, int $ttlSeconds = 86400): bool
-{
-    if ($id === '')
-        return false;
-    $dir = __DIR__ . '/logs/seen';
-    if (!is_dir($dir))
-        @mkdir($dir, 0775, true);
-    $file = $dir . '/' . preg_replace('~[^a-zA-Z0-9._-]~', '_', $id);
-    if (is_file($file) && (time() - filemtime($file) < $ttlSeconds))
-        return true;
-    @touch($file);
-    return false;
+// === Глобальные обработчики ошибок/исключений/фаталов ===
+if (!function_exists('wa_install_error_handlers')) {
+    function wa_install_error_handlers(): void
+    {
+        // Всё логируем, но не подавляем нативное поведение PHP
+        set_error_handler(function (int $severity, string $message, string $file = '', int $line = 0) {
+            wa_log_error('PHP error', compact('severity', 'message', 'file', 'line'));
+            return false; // вернуть false = отдать дальше PHP (стандартно)
+        });
+
+        set_exception_handler(function (Throwable $e) {
+            wa_log_error('Uncaught exception', [
+                'type' => get_class($e),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => substr($e->getTraceAsString(), 0, 4000),
+            ]);
+            // Ничего не выводим, чтобы не светить детали пользователю
+            http_response_code(500);
+        });
+
+        register_shutdown_function(function () {
+            $e = error_get_last();
+            if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+                wa_log_error('PHP Fatal shutdown', $e);
+            }
+        });
+
+        // На время отладки можно включить показ ошибок в браузер (потом выключи!)
+        if (isset($GLOBALS['WA_MAIN_LOG_DEBUG']) && $GLOBALS['WA_MAIN_LOG_DEBUG']) {
+            @ini_set('display_errors', '1');
+            @ini_set('display_startup_errors', '1');
+            @error_reporting(E_ALL);
+        }
+    }
+    wa_install_error_handlers();
 }
+
 
 /**
  * ----- ФОРМАТИРОВАНИЕ ВХОДЯЩИХ СООБЩЕНИЙ -----
@@ -563,14 +581,16 @@ function send_whatsapp_template(
     curl_close($ch);
 
     $decoded = json_decode((string) $resp, true);
-    bu_log(__DIR__ . '/logs/forward.log', [
+
+    /*bu_log(__DIR__ . '/logs/forward.log', [
         'action' => 'send_template',
         'to' => $to,
         'template' => $templateName,
         'http_code' => $code,
         'resp' => $decoded ?: $resp,
         'curl_err' => $err ?: null,
-    ]);
+    ]);*/
+
     $firstError = $decoded['error']['code'] ?? ($decoded['errors'][0]['code'] ?? null);
 
     return [
@@ -630,14 +650,14 @@ function send_whatsapp_text_detailed(
         $decoded = json_decode((string) $resp, true);
         $firstError = $decoded['error']['code'] ?? ($decoded['errors'][0]['code'] ?? null);
 
-        bu_log(__DIR__ . '/logs/forward.log', [
+        /*bu_log(__DIR__ . '/logs/forward.log', [
             'action' => 'send_text',
             'to' => $to,
             'chunk' => ($idx + 1) . '/' . count($chunks),
             'http_code' => $code,
             'resp' => $decoded ?: $resp,
             'curl_err' => $err ?: null,
-        ]);
+        ]);*/
 
         $ok = ($code >= 200 && $code < 300);
         $last = ['ok' => $ok, 'http_code' => $code, 'resp' => $decoded ?: $resp, 'first_error_code' => $firstError];

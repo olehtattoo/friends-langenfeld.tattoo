@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 // wa_list_numbers.php
 // Открываешь: https://yourdomain/wa_list_numbers.php
 // ВНИМАНИЕ: в коде зашит боевой токен. После проверки лучше перевыпусти токен и вынеси его в env/конфиг.

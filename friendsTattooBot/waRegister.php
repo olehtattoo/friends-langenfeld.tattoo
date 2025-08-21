@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 // wa_register_number.php
 // Открой: https://yourdomain/wa_register_number.php
 // Делает:

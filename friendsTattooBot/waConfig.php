@@ -33,9 +33,13 @@ $ADMIN_PASS               = 'Adm#K7p!w29Qf4ZrS3^Lm0vB';
 $ADMIN_LOGIN_MAX_FAILS    = 5;
 $ADMIN_LOGIN_LOCK_SECONDS = 300;
 
-$ADMIN_LOGIN_LOG_DIR  = __DIR__ . '/logs';
+/*$ADMIN_LOGIN_LOG_DIR  = __DIR__ . '/logs';
 $ADMIN_LOGIN_REQ_LOG  = $ADMIN_LOGIN_LOG_DIR . '/requests.log';
-$ADMIN_LOGIN_AUTH_DIR = $ADMIN_LOGIN_LOG_DIR . '/auth_attempts';
+$ADMIN_LOGIN_AUTH_DIR = $ADMIN_LOGIN_LOG_DIR . '/auth_attempts';*/
+
+$WA_MAIN_LOG = __DIR__ . '/waMainLog.log';
+$WA_MAIN_LOG_DEBUG  = true;
+
 
 // Webhook fields (на будущее)
 $WEBHOOK_FIELDS = [

@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 // wa_notify_me.php
 // Открой в браузере: https://yourdomain/wa_notify_me.php
 // Опционально: https://yourdomain/wa_notify_me.php?to=+4917632565824&text=Привет!
