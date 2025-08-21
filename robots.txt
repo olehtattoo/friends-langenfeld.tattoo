@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /tmp/
+Allow: /
+
+Sitemap: https://friends-langenfeld.tattoo/sitemap.xml
