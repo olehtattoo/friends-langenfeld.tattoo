@@ -300,8 +300,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $GLOBALS['ACCESS_TOKEN'],
             $GLOBALS['FORWARD_TO'],
             $fmt['text'],
-            'hello_world', // шаблон на случай 24h окна
-            'en_US'
+            $GLOBALS['TEMPLATE_NAME'], // шаблон на случай 24h окна
+            $GLOBALS['TEMPLATE_LANG']
         );
         if (!$ok) {
             bu_log($GLOBALS['ADMIN_LOGIN_LOG_DIR'] . '/forward_errors.log', ['reason' => 'forward_with_fallback failed', 'platform'=>$fmt['platform'] ?? '']);
