@@ -5,16 +5,8 @@
 // 1) POST /{PHONE_NUMBER_ID}/register с PIN
 // 2) GET  /{WABA_ID}/phone_numbers — статус номера
 
+require_once __DIR__ . 'waConfig.php';
 declare(strict_types=1);
-
-// ---- НАСТРОЙКИ ----
-$GRAPH_VERSION   = 'v21.0';
-$WABA_ID         = '1852405798675477';
-$PHONE_NUMBER_ID = '700570583149082';
-$ACCESS_TOKEN    = 'EAAP96vFSjHoBPHJIoDaFwDCazs4pC8bVo4e9j2ZBY8GZBp6rDJ0sGscjZCD97tHVS5fGy4pnzu7ZBWZAxcDNu60jivDfhOX8YSGLBCNwIMu295sEL1aNZAHzAh50fq6KyPwZAUZBf3sVH9ZBMXSWTBMO4UW7Yfr4szPqLF5pccChQIoo9goPZAzkuf38xcxU8GzwZDZD'; // токен, КОТОРЫЙ уже видел этот WABA
-$PIN             = '479812';     // твой 6-значный PIN двухэтапной проверки
-$CERTIFICATE_B64 = '';           // для Cloud API оставить пустым (нужен только при миграции с BSP)
-// -------------------
 
 ini_set('display_errors','0');
 ini_set('log_errors','1');

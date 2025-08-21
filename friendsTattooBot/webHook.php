@@ -1,37 +1,31 @@
-<?php
-// /friendsTattooBot/webHook.php
+<?php declare(strict_types=1);
+
+
+// === CRASH CATCHER ===
+/*ini_set('display_errors','1');
+ini_set('log_errors','1');
+error_reporting(E_ALL);
+$__logdir = __DIR__ . '/logs';
+if (!is_dir($__logdir)) @mkdir($__logdir, 0775, true);
+ini_set('error_log', $__logdir . '/php_error.log');
+register_shutdown_function(function () use ($__logdir) {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        @file_put_contents($__logdir . '/fatal.log', date('c') . ' ' . json_encode($e, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND);
+    }
+});*/
+
 session_start();
 
-/**
- * =============== НАСТРОЙКИ ОСНОВНЫЕ ===============
- */
-const VERIFY_TOKEN = 'FbHook_9x@R2tZ!7mLpQ3vWfD6sU';
-const ADMIN_PASS   = 'Adm#K7p!w29Qf4ZrS3^Lm0vB';
-const MAX_FAILS    = 5;
-const LOCK_SECONDS = 300;
-const LOG_DIR      = __DIR__ . '/logs';
-const REQ_LOG      = LOG_DIR . '/requests.log';
-const AUTH_DIR     = LOG_DIR . '/auth_attempts';
-
-/**
- * =============== НАСТРОЙКИ WHATSAPP CLOUD API (для переадресации) ===============
- */
-$GRAPH_VERSION   = 'v21.0';
-$PHONE_NUMBER_ID = '700570583149082'; // Cloud API Phone Number ID
-$ACCESS_TOKEN    = 'EAAP96vFSjHoBPHJIoDaFwDCazs4pC8bVo4e9j2ZBY8GZBp6rDJ0sGscjZCD97tHVS5fGy4pnzu7ZBWZAxcDNu60jivDfhOX8YSGLBCNwIMu295sEL1aNZAHzAh50fq6KyPwZAUZBf3sVH9ZBMXSWTBMO4UW7Yfr4szPqLF5pccChQIoo9goPZAzkuf38xcxU8GzwZDZD';
-$FORWARD_TO      = '+4917632565824';   // ваш личный номер WhatsApp
-
-/**
- * Подключаем утилиты
- */
+require_once __DIR__ . '/waConfig.php';
 require_once __DIR__ . '/waBotUtils.php';
 
 /**
  * =============== УТИЛИТЫ ВЕБ-СЕРВИСА ===============
  */
 function ensure_dirs(): void {
-    if (!is_dir(LOG_DIR)) @mkdir(LOG_DIR, 0775, true);
-    if (!is_dir(AUTH_DIR)) @mkdir(AUTH_DIR, 0775, true);
+    if (!is_dir($GLOBALS['ADMIN_LOGIN_LOG_DIR']))  @mkdir($GLOBALS['ADMIN_LOGIN_LOG_DIR'], 0775, true);
+    if (!is_dir($GLOBALS['ADMIN_LOGIN_AUTH_DIR'])) @mkdir($GLOBALS['ADMIN_LOGIN_AUTH_DIR'], 0775, true);
 }
 function client_ip(): string {
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
@@ -78,7 +72,7 @@ function log_meta_request(string $raw): void {
         'post'    => $_POST,
         'body'    => $raw,
     ];
-    @file_put_contents(REQ_LOG, json_encode($entry, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND);
+    @file_put_contents($GLOBALS['ADMIN_LOGIN_REQ_LOG'], json_encode($entry, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND);
 }
 function respond(int $code, string $body, string $type='text/html; charset=utf-8'): void {
     http_response_code($code);
@@ -88,16 +82,24 @@ function respond(int $code, string $body, string $type='text/html; charset=utf-8
 }
 function is_locked(string $ip): array {
     ensure_dirs();
-    $f = AUTH_DIR . '/'. preg_replace('~[^a-zA-Z0-9\.\-_:]~','_', $ip) . '.json';
+    $f = $GLOBALS['ADMIN_LOGIN_AUTH_DIR'] . '/' . preg_replace('~[^a-zA-Z0-9\.\-_:]~','_', $ip) . '.json';
     if (!is_file($f)) return ['locked'=>false,'fails'=>0,'until'=>0,'file'=>$f];
     $data = json_decode(@file_get_contents($f), true) ?: [];
-    return ['locked'=> time() < (int)($data['until'] ?? 0), 'fails'=>(int)($data['fails'] ?? 0), 'until'=>(int)($data['until'] ?? 0), 'file'=>$f];
+    return [
+        'locked'=> time() < (int)($data['until'] ?? 0),
+        'fails' => (int)($data['fails'] ?? 0),
+        'until' => (int)($data['until'] ?? 0),
+        'file'  => $f
+    ];
 }
 function record_fail(string $ip): void {
     $st = is_locked($ip);
     $fails = $st['fails'] + 1;
     $until = $st['until'];
-    if ($fails >= MAX_FAILS) { $until = time() + LOCK_SECONDS; $fails = 0; }
+    if ($fails >= (int)$GLOBALS['ADMIN_LOGIN_MAX_FAILS']) {
+        $until = time() + (int)$GLOBALS['ADMIN_LOGIN_LOCK_SECONDS'];
+        $fails = 0;
+    }
     @file_put_contents($st['file'], json_encode(['fails'=>$fails, 'until'=>$until]));
 }
 function record_success(string $ip): void {
@@ -146,18 +148,17 @@ log_meta_request($RAW_BODY);
 /**
  * =============== VERIFY ДЛЯ META (GET hub.*) ===============
  */
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && (isset($_GET['hub_verify_token']) || isset($_GET['hub.verify_token']))) {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && (isset($_GET['hub_verify_token']) || isset($_GET['hub.verify_token']))) {
     $token     = $_GET['hub_verify_token'] ?? $_GET['hub.verify_token'] ?? '';
     $challenge = $_GET['hub_challenge']    ?? $_GET['hub.challenge']    ?? '';
     $mode      = $_GET['hub_mode']         ?? $_GET['hub.mode']         ?? '';
     if ($mode === 'subscribe' || $mode === '') {
-        if ($token === VERIFY_TOKEN) {
+        if ($token === ($GLOBALS['VERIFY_TOKEN'] ?? '')) {
             header('Content-Type: text/plain; charset=utf-8');
             echo $challenge;
             exit;
-        } else {
-            respond(403, "Invalid token", 'text/plain; charset=utf-8');
         }
+        respond(403, "Invalid token", 'text/plain; charset=utf-8');
     }
 }
 
@@ -189,24 +190,23 @@ if (isset($_GET['view']) && $_GET['view'] === 'logs') {
         $wait = $lock['until'] - time();
         respond(429, html_head('Locked') . "<body><h3>Too Many Attempts</h3><p>IP заблокирован ещё на {$wait} сек.</p></body></html>");
     }
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $pass = $_POST['password'] ?? '';
-        if (hash_equals(ADMIN_PASS, $pass)) {
+        if (hash_equals($GLOBALS['ADMIN_PASS'], $pass)) {
             $_SESSION['authed'] = true;
             record_success($ip);
             header('Location: ?view=logs');
             exit;
-        } else {
-            record_fail($ip);
-            login_screen('Неверный пароль');
         }
+        record_fail($ip);
+        login_screen('Неверный пароль');
     }
     if (!($_SESSION['authed'] ?? false)) {
         login_screen('');
     }
 
-    $lines = tail_last_lines(REQ_LOG, 100);
-    $lines = array_reverse($lines); // новые сверху
+    $lines = tail_last_lines($GLOBALS['ADMIN_LOGIN_REQ_LOG'], 100);
+    $lines = array_reverse($lines);
     $itemsHtml = '';
     foreach ($lines as $line) {
         $j = json_decode($line, true);
@@ -222,7 +222,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'logs') {
                 <span class='pill'>{$ipx}</span>
                 <span class='pill muted'>{$time}</span>
             </div>
-            <div class='muted' style='margin:8px 0'>{$uri}</div>
+            <div class='muted' style='margin:8px 0'>".htmlspecialchars($uri)."</div>
             <pre><code>".htmlspecialchars($pretty)."</code></pre>
         </div>";
     }
@@ -238,7 +238,7 @@ if (isset($_GET['view']) && $_GET['view'] === 'logs') {
 /**
  * =============== БАЗОВАЯ СТРАНИЦА (ручной GET) ===============
  */
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $head = html_head('Webhook');
     respond(200, $head . "<body>
         <h2>✅ Webhook работает</h2>
@@ -252,11 +252,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 /**
  * =============== ОБРАБОТКА СОБЫТИЙ (POST) ===============
- * 1) Немедленно отвечаем 200 OK
- * 2) После отправки ответа — форматируем и пересылаем в фоне
  */
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     // 1) мгновенный ответ клиенту
     http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
@@ -274,46 +271,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $fmt = format_incoming($RAW_BODY); // определит платформу, соберет текст и id
 
         // Если не настоящие входящие — выходим
-        if (!$fmt['ok'] || empty($fmt['message_ids'])) {
-            @file_put_contents(LOG_DIR . '/formatted.log', "[" . date('c') . "]\n(нет входящих) " . ($fmt['text'] ?? '') . "\n\n", FILE_APPEND);
+        if (!($fmt['ok'] ?? false) || empty($fmt['message_ids'])) {
+            @file_put_contents($GLOBALS['ADMIN_LOGIN_LOG_DIR'] . '/formatted.log', "[" . date('c') . "]\n(нет входящих) " . ($fmt['text'] ?? '') . "\n\n", FILE_APPEND);
             exit;
         }
 
         // Анти-loop для WhatsApp: если отправитель совпадает с номером пересылки — не эхаем
-        if ($fmt['platform'] === 'whatsapp') {
+        if (($fmt['platform'] ?? '') === 'whatsapp') {
             $fromNorm = preg_replace('~\D+~','', $fmt['sender_id'] ?? '');
-            $toNorm   = preg_replace('~\D+~','', $FORWARD_TO);
+            $toNorm   = preg_replace('~\D+~','', $GLOBALS['FORWARD_TO'] ?? '');
             if ($fromNorm !== '' && $fromNorm === $toNorm) exit;
         }
 
         // Анти-дубликаты: если ВСЕ ids уже видели — не пересылать
         $allSeen = true;
         foreach ($fmt['message_ids'] as $mid) {
-            $seen = bu_seen_event($mid);
-            if (!$seen) $allSeen = false;
+            if (!bu_seen_event($mid)) $allSeen = false;
         }
         if ($allSeen) exit;
 
         // Форматированный текст в лог
-        @file_put_contents(LOG_DIR . '/formatted.log', "[" . date('c') . "]\n" . $fmt['text'] . "\n\n", FILE_APPEND);
+        @file_put_contents($GLOBALS['ADMIN_LOGIN_LOG_DIR'] . '/formatted.log', "[" . date('c') . "]\n" . ($fmt['text'] ?? '') . "\n\n", FILE_APPEND);
 
         // Пересылка на ваш WhatsApp
         $ok = forward_with_fallback(
-            $GRAPH_VERSION,
-            $PHONE_NUMBER_ID,
-            $ACCESS_TOKEN,
-            $FORWARD_TO,
+            $GLOBALS['GRAPH_VERSION'],
+            $GLOBALS['PHONE_NUMBER_ID'],
+            $GLOBALS['ACCESS_TOKEN'],
+            $GLOBALS['FORWARD_TO'],
             $fmt['text'],
             'hello_world', // шаблон на случай 24h окна
             'en_US'
         );
         if (!$ok) {
-            bu_log(LOG_DIR . '/forward_errors.log', ['reason' => 'forward_with_fallback failed', 'platform'=>$fmt['platform']]);
+            bu_log($GLOBALS['ADMIN_LOGIN_LOG_DIR'] . '/forward_errors.log', ['reason' => 'forward_with_fallback failed', 'platform'=>$fmt['platform'] ?? '']);
         }
     } catch (Throwable $e) {
-        bu_log(LOG_DIR . '/forward_errors.log', ['exception' => $e->getMessage()]);
+        bu_log($GLOBALS['ADMIN_LOGIN_LOG_DIR'] . '/forward_errors.log', ['exception' => $e->getMessage()]);
     }
-
     exit;
 }
 

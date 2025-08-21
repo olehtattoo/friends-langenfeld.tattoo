@@ -1,35 +1,55 @@
-<?php
-
+<?php declare(strict_types=1);
 
 $GRAPH_VERSION = 'v21.0';
 
-//whatsapp
-$WABA_ID = '1852405798675477';
+// WhatsApp
+$WABA_ID         = '1852405798675477';
 $PHONE_NUMBER_ID = '700570583149082';
-$DEFAULT_TO = '+4917632565824'; // твой основной номер
-$FORWARD_TO = '+4917632565824';   // ваш личный номер WhatsApp
-$PIN = '479812';     // твой 6-значный PIN двухэтапной проверки
-$CERTIFICATE_B64 = '';           // для Cloud API оставить пустым (нужен только при миграции с BSP)
 
+$DEFAULT_TO = '+4917632565824';
+$FORWARD_TO = '+4917632565824';
+
+$PIN            = '479812';
+$CERTIFICATE_B64 = ''; // для Cloud API пусто
+
+// Templates
 $TEMPLATE_NAME = 'hello_world';
-$TEMPLATE_LANG = 'en_US';          // стандартный язык шаблона
+$TEMPLATE_LANG = 'en_US';
 
-$APP_ID = '1123610443025530';                 
-$APP_SECRET = 'e3efa58fff48c69c9290e0fffa12de3f'; 
+// App
+$APP_ID     = '1123610443025530';
+$APP_SECRET = 'e3efa58fff48c69c9290e0fffa12de3f';
 
-$ACCESS_TOKEN = 'EAAP96vFSjHoBPHJIoDaFwDCazs4pC8bVo4e9j2ZBY8GZBp6rDJ0sGscjZCD97tHVS5fGy4pnzu7ZBWZAxcDNu60jivDfhOX8YSGLBCNwIMu295sEL1aNZAHzAh50fq6KyPwZAUZBf3sVH9ZBMXSWTBMO4UW7Yfr4szPqLF5pccChQIoo9goPZAzkuf38xcxU8GzwZDZD'; // токен, КОТОРЫЙ уже видел этот WABA
-
+// Tokens
+$ACCESS_TOKEN      = 'EAAP96vFSjHoBPHJIoDaFwDCazs4pC8bVo4e9j2ZBY8GZBp6rDJ0sGscjZCD97tHVS5fGy4pnzu7ZBWZAxcDNu60jivDfhOX8YSGLBCNwIMu295sEL1aNZAHzAh50fq6KyPwZAUZBf3sVH9ZBMXSWTBMO4UW7Yfr4szPqLF5pccChQIoo9goPZAzkuf38xcxU8GzwZDZD';
 $SYSTEM_USER_TOKEN = 'EAAP96vFSjHoBPHJIoDaFwDCazs4pC8bVo4e9j2ZBY8GZBp6rDJ0sGscjZCD97tHVS5fGy4pnzu7ZBWZAxcDNu60jivDfhOX8YSGLBCNwIMu295sEL1aNZAHzAh50fq6KyPwZAUZBf3sVH9ZBMXSWTBMO4UW7Yfr4szPqLF5pccChQIoo9goPZAzkuf38xcxU8GzwZDZD';
 
+// Webhook
 $CALLBACK_URL = 'https://friends-langenfeld.tattoo/friendsTattooBot/webHook.php';
 $VERIFY_TOKEN = 'FbHook_9x@R2tZ!7mLpQ3vWfD6sU';
 
+// Admin/login anti-bruteforce
+$ADMIN_PASS               = 'Adm#K7p!w29Qf4ZrS3^Lm0vB';
+$ADMIN_LOGIN_MAX_FAILS    = 5;
+$ADMIN_LOGIN_LOCK_SECONDS = 300;
 
-const VERIFY_TOKEN = 'FbHook_9x@R2tZ!7mLpQ3vWfD6sU';
-const ADMIN_PASS = 'Adm#K7p!w29Qf4ZrS3^Lm0vB';
-const MAX_FAILS = 5;
-const LOCK_SECONDS = 300;
-const LOG_DIR = __DIR__ . '/logs';
-const REQ_LOG = LOG_DIR . '/requests.log';
-const AUTH_DIR = LOG_DIR . '/auth_attempts';
+$ADMIN_LOGIN_LOG_DIR  = __DIR__ . '/logs';
+$ADMIN_LOGIN_REQ_LOG  = $ADMIN_LOGIN_LOG_DIR . '/requests.log';
+$ADMIN_LOGIN_AUTH_DIR = $ADMIN_LOGIN_LOG_DIR . '/auth_attempts';
 
+// Webhook fields (на будущее)
+$WEBHOOK_FIELDS = [
+  'messages',
+  'message_template_status_update',
+  'message_template_quality_update',
+  'phone_number_name_update',
+  'phone_number_quality_update',
+  'account_update',
+  'account_alerts',
+  'account_review_update',
+  'business_capability_update',
+  'business_status_update',
+  'flows',
+  'automatic_events',
+  'user_preferences',
+];

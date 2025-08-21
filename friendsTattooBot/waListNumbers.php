@@ -3,13 +3,8 @@
 // Открываешь: https://yourdomain/wa_list_numbers.php
 // ВНИМАНИЕ: в коде зашит боевой токен. После проверки лучше перевыпусти токен и вынеси его в env/конфиг.
 
+require_once __DIR__ . 'waConfig.php';
 declare(strict_types=1);
-
-// --- НАСТРОЙКИ ---
-$GRAPH_VERSION = 'v21.0';
-$WABA_ID       = '1852405798675477'; // ВАЖНО: в КАВЫЧКАХ, не в бэктиках
-$ACCESS_TOKEN  = 'EAAP96vFSjHoBPHJIoDaFwDCazs4pC8bVo4e9j2ZBY8GZBp6rDJ0sGscjZCD97tHVS5fGy4pnzu7ZBWZAxcDNu60jivDfhOX8YSGLBCNwIMu295sEL1aNZAHzAh50fq6KyPwZAUZBf3sVH9ZBMXSWTBMO4UW7Yfr4szPqLF5pccChQIoo9goPZAzkuf38xcxU8GzwZDZD';
-// ---------------
 
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');

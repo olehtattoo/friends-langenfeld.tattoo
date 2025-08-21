@@ -1,6 +1,4 @@
 <?php
-// /friendsTattooBot/waBotUtils.php
-declare(strict_types=1);
 
 /**
  * ----- БАЗОВЫЕ УТИЛИТЫ -----

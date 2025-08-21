@@ -7,36 +7,10 @@
 // 4) Проверяет статусы подписок
 // 5) Показывает APP_TOKEN в выводе (не логируйте его в проде)
 
+require_once __DIR__ . 'waConfig.php';
 declare(strict_types=1);
 
-// ---------- НАСТРОЙКИ ----------
-$APP_ID            = '1123610443025530';                 // твой App ID
-$APP_SECRET        = 'e3efa58fff48c69c9290e0fffa12de3f'; // твой App Secret
-$SYSTEM_USER_TOKEN = 'EAAP96vFSjHoBPHJIoDaFwDCazs4pC8bVo4e9j2ZBY8GZBp6rDJ0sGscjZCD97tHVS5fGy4pnzu7ZBWZAxcDNu60jivDfhOX8YSGLBCNwIMu295sEL1aNZAHzAh50fq6KyPwZAUZBf3sVH9ZBMXSWTBMO4UW7Yfr4szPqLF5pccChQIoo9goPZAzkuf38xcxU8GzwZDZD';
 
-$WABA_ID         = '1852405798675477';
-$GRAPH_VERSION   = 'v21.0';
-
-$CALLBACK_URL    = 'https://friends-langenfeld.tattoo/friendsTattooBot/webHook.php';
-$VERIFY_TOKEN    = 'FbHook_9x@R2tZ!7mLpQ3vWfD6sU';
-
-// Поля для подписки (максимальный охват)
-$WEBHOOK_FIELDS = [
-  'messages',
-  'message_template_status_update',
-  'message_template_quality_update',
-  'phone_number_name_update',
-  'phone_number_quality_update',
-  'account_update',
-  'account_alerts',
-  'account_review_update',
-  'business_capability_update',
-  'business_status_update',
-  'flows',
-  'automatic_events',
-  'user_preferences',
-];
-// --------------------------------
 
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');

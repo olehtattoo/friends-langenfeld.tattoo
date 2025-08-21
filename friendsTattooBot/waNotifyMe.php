@@ -4,17 +4,8 @@
 // Опционально: https://yourdomain/wa_notify_me.php?to=+4917632565824&text=Привет!
 // Если text не задан, отправим шаблон hello_world (дойдёт всегда)
 
+require_once __DIR__ . 'waConfig.php';
 declare(strict_types=1);
-
-// ====== НАСТРОЙКИ ======
-$GRAPH_VERSION   = 'v21.0';
-$PHONE_NUMBER_ID = '700570583149082'; // твой Phone Number ID (Cloud API)
-$ACCESS_TOKEN    = 'EAAP96vFSjHoBPHJIoDaFwDCazs4pC8bVo4e9j2ZBY8GZBp6rDJ0sGscjZCD97tHVS5fGy4pnzu7ZBWZAxcDNu60jivDfhOX8YSGLBCNwIMu295sEL1aNZAHzAh50fq6KyPwZAUZBf3sVH9ZBMXSWTBMO4UW7Yfr4szPqLF5pccChQIoo9goPZAzkuf38xcxU8GzwZDZD';
-
-$DEFAULT_TO      = '+4917632565824'; // твой основной номер
-$TEMPLATE_NAME   = 'hello_world';
-$TEMPLATE_LANG   = 'en_US';          // стандартный язык шаблона
-// =======================
 
 function onlyDigits(string $s): string { return preg_replace('/\D+/', '', $s); }
 
