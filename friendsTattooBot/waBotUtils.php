@@ -1,7 +1,12 @@
 <?php declare(strict_types=1);
 
-require_once __DIR__ . '/waLogDebug.php';
-require_once __DIR__ . '/waConfig.php';
+require_once __DIR__ . '/waDebug/waCrashCatcher.php';
+require_once __DIR__ . '/waDebug/waLogDebug.php';
+
+require_once __DIR__ . '/waConfig/waConfig.php';
+require_once __DIR__ . '/waConfig/waConfigMessage.php';
+
+require_once __DIR__ . '/waDbTools/waDbHelper.php';
 
 /**
  * ----- БАЗОВЫЕ УТИЛИТЫ -----
@@ -70,6 +75,8 @@ if (!function_exists('wa_install_error_handlers')) {
 function format_incoming(string $raw): array
 {
     $p = json_decode($raw, true);
+    wa_log_info('Format_incoming function:', $p);
+
     if (!$p || !isset($p['entry'][0])) {
         return ['ok' => false, 'platform' => 'unknown', 'text' => '⚠️ Некорректный webhook payload.', 'message_ids' => [], 'sender_id' => '', 'sender_name' => ''];
     }
@@ -582,14 +589,14 @@ function send_whatsapp_template(
 
     $decoded = json_decode((string) $resp, true);
 
-    /*bu_log(__DIR__ . '/logs/forward.log', [
+    wa_log_info('Template Send:', [
         'action' => 'send_template',
         'to' => $to,
         'template' => $templateName,
         'http_code' => $code,
         'resp' => $decoded ?: $resp,
         'curl_err' => $err ?: null,
-    ]);*/
+    ]);
 
     $firstError = $decoded['error']['code'] ?? ($decoded['errors'][0]['code'] ?? null);
 
@@ -601,36 +608,101 @@ function send_whatsapp_template(
     ];
 }
 
+
+
 function send_whatsapp_text_detailed(
     string $graphVersion,
     string $phoneNumberId,
     string $accessToken,
     string $toPhone,
-    string $text
+    string $text,
+    ?string $contextUserId = null,
+    bool $bossAnswer = false,
 ): array {
     $endpoint = "https://graph.facebook.com/{$graphVersion}/" . rawurlencode($phoneNumberId) . "/messages";
     $to = bu_msisdn($toPhone);
 
-    $limit = 4000; // безопасная длина
-    $chunks = [];
-    if (function_exists('mb_strlen') && function_exists('mb_substr')) {
-        $len = mb_strlen($text, 'UTF-8');
-        for ($i = 0; $i < $len; $i += $limit)
-            $chunks[] = mb_substr($text, $i, $limit, 'UTF-8');
+    // --- Ютилиты для работы с UTF-8 без порчи символов ---
+    $strlen = function (string $s): int {
+        return function_exists('mb_strlen') ? mb_strlen($s, 'UTF-8') : strlen($s);
+    };
+    $substr = function (string $s, int $start, ?int $len = null): string {
+        if (function_exists('mb_substr')) {
+            return $len === null ? mb_substr($s, $start, null, 'UTF-8') : mb_substr($s, $start, $len, 'UTF-8');
+        }
+        return $len === null ? substr($s, $start) : substr($s, $start, $len);
+    };
+
+    $L = $strlen($text);
+
+    // --- Сформируем части с пометкой, где будут кнопки ---
+    // Каждая часть: ['content' => string, 'interactive' => bool]
+    $parts = [];
+
+    if ($L <= 1000) {
+        // одна часть с кнопками
+        $parts[] = ['content' => $text, 'interactive' => true];
+    } elseif ($L <= 2000) {
+        // делим на две части пополам; последняя с кнопками
+        $p1 = intdiv($L, 2);
+        $part1 = $substr($text, 0, $p1);
+        $part2 = $substr($text, $p1);
+        $parts[] = ['content' => $part1, 'interactive' => false];
+        $parts[] = ['content' => $part2, 'interactive' => true];
+    } elseif ($L <= 5000) {
+        // первая = L - 1000 (текст), последняя = 1000 (с кнопками)
+        $keepForLast = 1000;
+        $firstLen = $L - $keepForLast; // 1001..4000
+        $part1 = $substr($text, 0, $firstLen);
+        $part2 = $substr($text, $firstLen);
+        $parts[] = ['content' => $part1, 'interactive' => false];
+        $parts[] = ['content' => $part2, 'interactive' => true];
     } else {
-        $chunks = str_split($text, $limit);
+        // > 5000: первые части — ровные, последняя 1000 (с кнопками),
+        // при этом размер любой "ровной" части ≤ 4000.
+        $lastLen = 1000;
+        $earlyTotal = $L - $lastLen;
+
+        // Сколько ровных кусков нужно, чтобы каждый был ≤ 4000
+        $k = (int) ceil($earlyTotal / 4000); // k >= 2
+        $chunkSize = (int) ceil($earlyTotal / $k); // гарантированно ≤ 4000
+
+        $offset = 0;
+        for ($i = 0; $i < $k; $i++) {
+            // для последних ранних частей подбираем точную длину
+            $remaining = $earlyTotal - $offset;
+            $take = ($i === $k - 1) ? $remaining : min($chunkSize, $remaining);
+            $parts[] = ['content' => $substr($text, $offset, $take), 'interactive' => false];
+            $offset += $take;
+        }
+        // последняя 1000 с кнопками
+        $parts[] = ['content' => $substr($text, $earlyTotal), 'interactive' => true];
     }
 
     $last = ['ok' => true, 'http_code' => 200, 'resp' => null, 'first_error_code' => null];
 
-    foreach ($chunks as $idx => $part) {
+    foreach ($parts as $idx => $p) {
+        // Собираем базовое тело
         $body = [
             'messaging_product' => 'whatsapp',
             'to' => $to,
             'type' => 'text',
-            'text' => ['body' => $part, 'preview_url' => false],
+            'text' => ['body' => $p['content'], 'preview_url' => false],
         ];
 
+        /*// Если интерактив — прикрутить кнопки из глобалок
+        if (!empty($p['interactive'])) {
+            // ВАЖНО: wa_attach_buttons_from_globals возвращает новый body
+            $body = wa_attach_buttons($body);
+        }*/
+
+        if (!empty($p['interactive']) && !$bossAnswer) {
+            // укажите ваш бизнес-номер (E.164 без +) в конфиге:
+            // $GLOBALS['WA_BUSINESS_E164'] = '4915212397076';
+            $body = wa_attach_number_links($body, $GLOBALS['WA_BUSINESS_NUMBER'], 'de', $contextUserId);
+        }
+
+        // Отправка
         $ch = curl_init($endpoint);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
@@ -650,14 +722,14 @@ function send_whatsapp_text_detailed(
         $decoded = json_decode((string) $resp, true);
         $firstError = $decoded['error']['code'] ?? ($decoded['errors'][0]['code'] ?? null);
 
-        /*bu_log(__DIR__ . '/logs/forward.log', [
-            'action' => 'send_text',
+        wa_log_info('WhatsApp Message Send:', [
+            'action' => (!empty($p['interactive']) ? 'send_interactive' : 'send_text'),
             'to' => $to,
-            'chunk' => ($idx + 1) . '/' . count($chunks),
+            'part' => ($idx + 1) . '/' . count($parts),
             'http_code' => $code,
             'resp' => $decoded ?: $resp,
             'curl_err' => $err ?: null,
-        ]);*/
+        ]);
 
         $ok = ($code >= 200 && $code < 300);
         $last = ['ok' => $ok, 'http_code' => $code, 'resp' => $decoded ?: $resp, 'first_error_code' => $firstError];
@@ -667,6 +739,7 @@ function send_whatsapp_text_detailed(
 
     return $last;
 }
+
 
 /**
  * Попытка отправки текста; при 131047 — отправляем шаблон (hello_world) и повторяем.
@@ -678,18 +751,309 @@ function forward_with_fallback(
     string $toPhone,
     string $text,
     string $fallbackTemplate = 'hello_world',
-    string $fallbackLang = 'en_US'
+    string $fallbackLang = 'en_US',
+    ?string $contextUserId = null,   
+    bool $bossAnswer = false,    // <-- новый параметр
 ): bool {
-    $res = send_whatsapp_text_detailed($graphVersion, $phoneNumberId, $accessToken, $toPhone, $text);
+    $res = send_whatsapp_text_detailed($graphVersion, $phoneNumberId, $accessToken, $toPhone, $text, $contextUserId, $bossAnswer);
     if ($res['ok'])
         return true;
 
-    if ((int) $res['first_error_code'] === 131047) {
-        $t = send_whatsapp_template($graphVersion, $phoneNumberId, $accessToken, $toPhone, $fallbackTemplate, $fallbackLang);
+    if ((int) ($res['first_error_code'] ?? 0) === 131047) {
+        $t = send_whatsapp_template($graphVersion, $phoneNumberId, $accessToken, $toPhone, $fallbackTemplate, $fallbackLang, $bossAnswer);
         if (!$t['ok'])
             return false;
-        $res2 = send_whatsapp_text_detailed($graphVersion, $phoneNumberId, $accessToken, $toPhone, $text);
+        $res2 = send_whatsapp_text_detailed($graphVersion, $phoneNumberId, $accessToken, $toPhone, $text, $contextUserId, $bossAnswer);
         return $res2['ok'];
     }
     return false;
+}
+
+
+/**
+ * Прикрепляет к TEXT-сообщению интерактивные кнопки из глобалок:
+ *  - $GLOBALS['MESSAGE_BUTTONS_USED']  — какие кнопки показывать (порядок, макс. 10)
+ *  - $GLOBALS['MESSAGE_BUTTONS']       — тексты/эмодзи + флаг 'text_answer_possible'
+ * Подписи берутся ТОЛЬКО через msg_btn().
+ *
+ * ≤3 кнопок → быстрые ответы (interactive/button), 4–10 → меню-список (interactive/list).
+ * Кнопки, у которых 'text_answer_possible' = true, получают id вида "<key>.text".
+ *
+ * @param array $body Обычное тело сообщения WhatsApp (type='text' с ['text']['body']).
+ * @return array Обновлённое тело (type='interactive') либо исходное, если кнопок нет.
+ */
+/*
+function wa_attach_buttons(array $body): array
+{
+    $usedKeys = $GLOBALS['MESSAGE_BUTTONS_USED'] ?? [];
+    $map = $GLOBALS['MESSAGE_BUTTONS'] ?? [];
+
+    // 1) Оставим только определённые в локализации и ограничим до 10
+    $keys = [];
+    foreach ($usedKeys as $k) {
+        if (isset($map[$k]))
+            $keys[] = (string) $k;
+        if (count($keys) >= 10)
+            break;
+    }
+    if (!$keys)
+        return $body;
+
+    // 2) Исходный текст (лимит интерактивов ~1024 символа)
+    $text = '';
+    if (($body['type'] ?? '') === 'text' && isset($body['text']['body'])) {
+        $text = (string) $body['text']['body'];
+    } elseif (isset($body['interactive']['body']['text'])) {
+        $text = (string) $body['interactive']['body']['text'];
+    }
+    $truncate = static function (string $s, int $max): string {
+        if ($max <= 0)
+            return $s;
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            return (mb_strlen($s, 'UTF-8') > $max)
+                ? rtrim(mb_substr($s, 0, max(1, $max - 1), 'UTF-8')) . '…'
+                : $s;
+        }
+        return (strlen($s) > $max) ? rtrim(substr($s, 0, max(1, $max - 1))) . '…' : $s;
+    };
+    $text = $truncate($text, 1024);
+
+    // 3) Разрешённые заголовки (ТОЛЬКО через msg_btn) и ID с флагом ".text" при необходимости
+    $resolved = [];
+    foreach ($keys as $k) {
+        $textAnswer = !empty($map[$k]['text_answer_possible']); // true => ожидается ввод текста
+        $resolved[] = [
+            'id' => $textAnswer ? ($k . '.text') : $k,
+            'title' => (string) msg_btn($k), // подпись только из вашей локализации
+        ];
+    }
+
+    // 4) Соберём interactive
+    unset($body['text']);
+    $body['type'] = 'interactive';
+
+    if (count($resolved) <= 3) {
+        // ----- Быстрые ответы (reply buttons): title ≤ 20
+        $btns = [];
+        foreach ($resolved as $b) {
+            $btns[] = [
+                'type' => 'reply',
+                'reply' => [
+                    'id' => $b['id'],
+                    'title' => $truncate($b['title'], 20),
+                ],
+            ];
+        }
+        $body['interactive'] = [
+            'type' => 'button',
+            'body' => ['text' => $text],
+            'action' => ['buttons' => $btns],
+        ];
+    } else {
+        // ----- Меню-список (4–10): button ≤ 20, section title ≤ 24, row title ≤ 24
+        // Кнопка-открывашка и заголовок секции — берем из уже разрешённых заголовков,
+        // чтобы не добавлять новой локализации.
+        $openBtnLabel = $truncate($resolved[0]['title'], 20);
+        $sectionTitle = $truncate(($resolved[1]['title'] ?? $resolved[0]['title']), 24);
+
+        $rows = [];
+        foreach ($resolved as $b) {
+            $rows[] = [
+                'id' => $b['id'],
+                'title' => $truncate($b['title'], 24),
+            ];
+        }
+
+        $body['interactive'] = [
+            'type' => 'list',
+            'body' => ['text' => $text],
+            'action' => [
+                'button' => $openBtnLabel,
+                'sections' => [
+                    [
+                        'title' => $sectionTitle,
+                        'rows' => $rows,
+                    ]
+                ],
+            ],
+        ];
+    }
+
+    return $body;
+}
+
+
+/**
+ * Встраивает «меню из ссылок» (без interactive).
+ * Для пунктов с 'text_answer_possible' = true добавляет в префилл: " // " после номера.
+ * Формат префилла:
+ *   "<emoji> <CODE> <N> "           — обычные пункты
+ *   "<emoji> <CODE> <N> // "        — пункты, где ожидается текст
+ *
+ * @param array       $body         Тело WA-сообщения (type='text' с ['text']['body']).
+ * @param string|null $businessE164 Ваш бизнес-номер (E.164 без +). Если null — берём из глобалок.
+ * @param string      $lang         Язык для msg_btn().
+ * @return array
+ */
+function wa_attach_number_links(
+    array $body,
+    ?string $businessE164 = null,
+    string $lang = 'de',
+    ?string $originalUserId = null
+): array {
+
+
+
+
+    $map = $GLOBALS['MESSAGE_BUTTONS'] ?? [];
+    $used = $GLOBALS['MESSAGE_BUTTONS_USED'] ?? [];
+
+    // Куда открывать чат
+    $dest = preg_replace('~\D+~', '', (string) ($businessE164 ?? ($GLOBALS['WA_BUSINESS_NUMBER'] ?? '')));
+    if ($dest === '')
+        return $body;
+
+    // Текст исходника
+    $text = '';
+    if (($body['type'] ?? '') === 'text' && isset($body['text']['body'])) {
+        $text = (string) $body['text']['body'];
+    } elseif (isset($body['interactive']['body']['text'])) {
+        $text = (string) $body['interactive']['body']['text'];
+    }
+
+    // Берём до 9 элементов по порядку из USED и только те, что есть в локализации
+    $keys = [];
+    foreach ($used as $k) {
+        if (isset($map[$k]))
+            $keys[] = (string) $k;
+        if (count($keys) >= 9)
+            break;
+    }
+    if (!$keys)
+        return $body;
+
+    $recipientWaId = preg_replace('~\D+~', '', (string) $originalUserId);
+
+    // Короткий код меню (8 hex)
+    $code = wa_menu_code_reserve([
+        'platform' => 'whatsapp',
+        'user_id' => $recipientWaId ?: null,                 // <-- ВАЖНО
+        'to_id' => $GLOBALS['PHONE_NUMBER_ID'] ?? null,    // ваш phone_number_id
+        'direction' => 'out',
+        'type' => 'text',
+        'text_body' => $text,
+        'payload_json' => ['menu_keys' => $keys],
+        'msg_ts' => time(),
+    ]);
+    wa_log_info('Reserved WA menu code', ['code' => $code, 'user_id' => $recipientWaId]);
+    wa_log_info('Reserved WA menu code', ['code' => $code, 'to' => $dest, 'text' => $text]);
+
+    $lines = [];
+    foreach ($keys as $i => $k) {
+        $num = (string) ($i + 1);
+        $emoji = (string) ($map[$k]['emoji'] ?? '');
+        $label = msg_btn($k, $lang, 0, true); // только ваша локализация
+        $needText = !empty($map[$k]['text_answer_possible']);
+
+        // Префилл: "<emoji> <CODE> <N> " или "<emoji> <CODE> <N> // "
+        $prefill = trim($emoji . ' ' . $code . ' ' . $num) . ($needText ? ' Text: ' : ' ');
+        $link = 'https://wa.me/' . $dest . '?text=' . rawurlencode($prefill);
+
+        $lines[] = $num . ') ' . $label;
+        $lines[] = $link;
+    }
+
+    $menuBlock = implode("\n", $lines);
+
+    // Обратно — обычный TEXT (не interactive)
+    $body['type'] = 'text';
+    $body['text'] = [
+        'body' => rtrim($text . "\n\n" . $menuBlock),
+        'preview_url' => false,
+    ];
+    unset($body['interactive']);
+
+    return $body;
+}
+
+
+/**
+ * Простой обработчик выбранной команды.
+ * Для примера реализован №3 (answer): отправляет клиенту объединённое сообщение
+ *   «их сообщение + ваш ответ».
+ *
+ * @param array $cmd Результат wa_bot_handle_own_message_code()
+ * @return array ['ok'=>bool, 'sent'=>bool, 'http_code'=>int|null, 'error'=>string|null]
+ */
+function wa_bot_process_own_command(array $cmd): array
+{
+    $fn = __FUNCTION__;
+    wa_log_enter($fn, ['code' => $cmd['code'] ?? '', 'num' => $cmd['command_num'] ?? 0, 'key' => $cmd['command_key'] ?? '']);
+
+    $res = ['ok' => false, 'sent' => false, 'http_code' => null, 'error' => null];
+
+    if (empty($cmd['ok'])) {
+        $res['error'] = 'invalid command payload';
+        wa_log_return($fn, $res);
+        return $res;
+    }
+
+    $key = (string) ($cmd['command_key'] ?? '');
+    $num = (int) ($cmd['command_num'] ?? 0);
+
+    // Проверим, куда слать
+    $toE164 = (string) ($cmd['target_user_id'] ?? '');
+    if ($toE164 === '' && !empty($cmd['original']['user_id'])) {
+        $toE164 = (string) $cmd['original']['user_id'];
+    }
+    if ($toE164 === '') {
+        $res['error'] = 'no target user_id';
+        wa_log_return($fn, $res);
+        return $res;
+    }
+
+    $ourText = (string) ($cmd['user_text'] ?? '');
+
+    // Карта действий (при желании развить логику для прочих команд)
+    switch ($key) {
+        case 'answer': // №3 – просто ответить текстом
+            if ($ourText === '') {
+                $res['error'] = 'no reply text';
+                wa_log_return($fn, $res);
+                return $res;
+            }
+
+            $send = send_whatsapp_text_detailed(
+                (string) ($GLOBALS['GRAPH_VERSION'] ?? 'v20.0'),
+                (string) ($GLOBALS['PHONE_NUMBER_ID'] ?? ''),
+                (string) ($GLOBALS['ACCESS_TOKEN'] ?? ''),
+                $toE164,
+                $ourText,
+                null,
+                true
+            );
+
+            $res['ok'] = (bool) ($send['ok'] ?? false);
+            $res['sent'] = $res['ok'];
+            $res['http_code'] = $send['http_code'] ?? null;
+            $res['error'] = $res['ok'] ? null : ('send failed: ' . json_encode($send, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+            wa_log_return($fn, $res);
+            return $res;
+
+        case 'translate':
+        case 'translate_simplify':
+        case 'answer_chatgpt':
+        case 'answer_chatgpt_automatic':
+            // TODO: реализовать нужную вам логику для остальных команд
+            $res['ok'] = true;
+            $res['error'] = 'not_implemented_for_key_' . $key;
+            wa_log_return($fn, $res);
+            return $res;
+
+        default:
+            $res['error'] = 'unknown_command_key';
+            wa_log_return($fn, $res);
+            return $res;
+    }
 }

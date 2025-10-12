@@ -3,8 +3,10 @@
 // Открываешь: https://yourdomain/wa_list_numbers.php
 // ВНИМАНИЕ: в коде зашит боевой токен. После проверки лучше перевыпусти токен и вынеси его в env/конфиг.
 
-require_once __DIR__ . 'waConfig.php';
-declare(strict_types=1);
+//показывает список номеров, привязанных к WABA
+
+require_once __DIR__ . '/waConfig/waConfig.php';
+
 
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');

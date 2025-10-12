@@ -4,6 +4,8 @@
 // Опционально: https://yourdomain/wa_notify_me.php?to=+4917632565824&text=Привет!
 // Если text не задан, отправим шаблон hello_world (дойдёт всегда)
 
+//создает новый чат с номером и отправляет туда сообщение или шаблон
+
 require_once __DIR__ . 'waConfig.php';
 declare(strict_types=1);
 

@@ -5,6 +5,8 @@
 // 1) POST /{PHONE_NUMBER_ID}/register с PIN
 // 2) GET  /{WABA_ID}/phone_numbers — статус номера
 
+//регистрирует номер в WABA с помощью PIN и показывает статус
+
 require_once __DIR__ . 'waConfig.php';
 declare(strict_types=1);
 

@@ -1,41 +1,48 @@
 <?php declare(strict_types=1);
 
+require_once __DIR__ . '/waDebug/waCrashCatcher.php';
+require_once __DIR__ . '/waDebug/waLogDebug.php';
 
-// === CRASH CATCHER ===
-/*ini_set('display_errors','1');
-ini_set('log_errors','1');
-error_reporting(E_ALL);
-$__logdir = __DIR__ . '/logs';
-if (!is_dir($__logdir)) @mkdir($__logdir, 0775, true);
-ini_set('error_log', $__logdir . '/php_error.log');
-register_shutdown_function(function () use ($__logdir) {
-    $e = error_get_last();
-    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
-        @file_put_contents($__logdir . '/fatal.log', date('c') . ' ' . json_encode($e, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND);
-    }
-});*/
+require_once __DIR__ . '/waConfig/waConfig.php';
+require_once __DIR__ . '/waBotUtils.php';
+
+
+
+
 
 session_start();
-
-require_once __DIR__ . '/waConfig.php';
-require_once __DIR__ . '/waBotUtils.php';
-require_once __DIR__ . '/waLogDebug.php';
 
 /**
  * =============== УТИЛИТЫ ВЕБ-СЕРВИСА ===============
  */
-/*function ensure_dirs(): void {
-    if (!is_dir($GLOBALS['ADMIN_LOGIN_LOG_DIR']))  @mkdir($GLOBALS['ADMIN_LOGIN_LOG_DIR'], 0775, true);
-    if (!is_dir($GLOBALS['ADMIN_LOGIN_AUTH_DIR'])) @mkdir($GLOBALS['ADMIN_LOGIN_AUTH_DIR'], 0775, true);
-}*/
 
-function client_ip(): string {
+function client_ip(): string
+{
     return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 }
-function get_headers_safe(): array {
+
+
+/**
+ * Возвращает безопасный список HTTP-заголовков как ассоциативный массив.
+ *
+ * Логика работы:
+ *  1) Если доступна функция getallheaders() и она вернула массив — используем его.
+ *  2) Иначе восстанавливаем заголовки из $_SERVER: все ключи с префиксом HTTP_
+ *     преобразуются к виду "Header-Name" (каждое слово с заглавной буквы, дефисы вместо подчёркиваний).
+ *  3) Дополнительно добавляем CONTENT_TYPE и CONTENT_LENGTH, т.к. они обычно приходят без префикса HTTP_.
+ *
+ * Особенности и ограничения:
+ *  - При дублирующихся заголовках значение будет перезаписано последним встреченным.
+ *  - Ключи массива чувствительны к регистру так, как сформированы (формат "Header-Name").
+ *
+ * @return array<string,string> Ассоциативный массив вида ['Header-Name' => 'value'].
+ */
+function get_headers_safe(): array
+{
     if (function_exists('getallheaders')) {
         $h = getallheaders();
-        if (is_array($h)) return $h;
+        if (is_array($h))
+            return $h;
     }
     $headers = [];
     foreach ($_SERVER as $k => $v) {
@@ -44,72 +51,40 @@ function get_headers_safe(): array {
             $headers[$name] = $v;
         }
     }
-    if (isset($_SERVER['CONTENT_TYPE']))   $headers['Content-Type']   = $_SERVER['CONTENT_TYPE'];
-    if (isset($_SERVER['CONTENT_LENGTH'])) $headers['Content-Length'] = $_SERVER['CONTENT_LENGTH'];
+    if (isset($_SERVER['CONTENT_TYPE']))
+        $headers['Content-Type'] = $_SERVER['CONTENT_TYPE'];
+    if (isset($_SERVER['CONTENT_LENGTH']))
+        $headers['Content-Length'] = $_SERVER['CONTENT_LENGTH'];
     return $headers;
 }
+
 /** Определяем, что это именно Meta (а не браузер) */
-function is_meta_request(array $headers): bool {
+function is_meta_request(array $headers): bool
+{
     $ua = $headers['User-Agent'] ?? $headers['User-agent'] ?? '';
-    if (!empty($headers['X-Hub-Signature']) || !empty($headers['X-Hub-Signature-256'])) return true;
-    if (isset($_GET['hub_verify_token']) || isset($_GET['hub.verify_token'])) return true;
+    if (!empty($headers['X-Hub-Signature']) || !empty($headers['X-Hub-Signature-256']))
+        return true;
+    if (isset($_GET['hub_verify_token']) || isset($_GET['hub.verify_token']))
+        return true;
     $ua_lc = strtolower($ua);
-    foreach (['facebook','instagram','whatsapp','meta'] as $m) {
-        if (strpos($ua_lc, $m) !== false) return true;
+    foreach (['facebook', 'instagram', 'whatsapp', 'meta'] as $m) {
+        if (strpos($ua_lc, $m) !== false)
+            return true;
     }
     return false;
 }
-/** Логируем ТОЛЬКО meta-запросы */
-function log_meta_request(string $raw): void {
-    //ensure_dirs();
-    $headers = get_headers_safe();
-    if (!is_meta_request($headers)) return;
-    $entry = [
-        'time'    => date('c'),
-        'method'  => $_SERVER['REQUEST_METHOD'] ?? 'GET',
-        'uri'     => $_SERVER['REQUEST_URI'] ?? '',
-        'ip'      => client_ip(),
-        'headers' => $headers,
-        'get'     => $_GET,
-        'post'    => $_POST,
-        'body'    => $raw,
-    ];
-    /*@file_put_contents($GLOBALS['ADMIN_LOGIN_REQ_LOG'], json_encode($entry, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "\n", FILE_APPEND);
-    */
-}
-function respond(int $code, string $body, string $type='text/html; charset=utf-8'): void {
+
+function respond(int $code, string $body, string $type = 'text/html; charset=utf-8'): void
+{
     http_response_code($code);
-    header('Content-Type: '.$type);
+    header('Content-Type: ' . $type);
     echo $body;
     exit;
 }
-/*function is_locked(string $ip): array {
-    //ensure_dirs();
-    $f = $GLOBALS['ADMIN_LOGIN_AUTH_DIR'] . '/' . preg_replace('~[^a-zA-Z0-9\.\-_:]~','_', $ip) . '.json';
-    if (!is_file($f)) return ['locked'=>false,'fails'=>0,'until'=>0,'file'=>$f];
-    $data = json_decode(@file_get_contents($f), true) ?: [];
-    return [
-        'locked'=> time() < (int)($data['until'] ?? 0),
-        'fails' => (int)($data['fails'] ?? 0),
-        'until' => (int)($data['until'] ?? 0),
-        'file'  => $f
-    ];
-}*/
-/*function record_fail(string $ip): void {
-    $st = is_locked($ip);
-    $fails = $st['fails'] + 1;
-    $until = $st['until'];
-    if ($fails >= (int)$GLOBALS['ADMIN_LOGIN_MAX_FAILS']) {
-        $until = time() + (int)$GLOBALS['ADMIN_LOGIN_LOCK_SECONDS'];
-        $fails = 0;
-    }
-    @file_put_contents($st['file'], json_encode(['fails'=>$fails, 'until'=>$until]));
-}*/
-/*function record_success(string $ip): void {
-    $st = is_locked($ip);
-    @file_put_contents($st['file'], json_encode(['fails'=>0, 'until'=>0]));
-}*/
-function html_head(string $title='Webhook'): string {
+
+
+function html_head(string $title = 'Webhook'): string
+{
     return "<!doctype html><html lang='ru'><meta charset='utf-8'><title>{$title}</title>
 <style>
  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:24px;background:#0f1115;color:#e5e7eb}
@@ -124,11 +99,30 @@ function html_head(string $title='Webhook'): string {
  form{display:flex;gap:10px;align-items:center}
 </style>";
 }
-function tail_last_lines(string $file, int $lines = 100): array {
-    if (!is_file($file)) return [];
-    $fp = fopen($file, 'r'); if (!$fp) return [];
-    $buffer = ''; $chunkSize = 8192; $pos = -1; $lineCount = 0;
-    fseek($fp, 0, SEEK_END); $fileSize = ftell($fp);
+
+
+
+/**
+ * Возвращает последние N строк файла.
+ * Подходит для быстрого просмотра хвоста логов. Если файл недоступен — вернёт [].
+ *
+ * @param string $file  Путь к файлу.
+ * @param int    $lines Количество строк с конца (по умолчанию 100).
+ * @return array Последние строки (без пустых), в обычном порядке.
+ */
+function tail_last_lines(string $file, int $lines = 100): array
+{
+    if (!is_file($file))
+        return [];
+    $fp = fopen($file, 'r');
+    if (!$fp)
+        return [];
+    $buffer = '';
+    $chunkSize = 8192;
+    $pos = -1;
+    $lineCount = 0;
+    fseek($fp, 0, SEEK_END);
+    $fileSize = ftell($fp);
     while ($lineCount <= $lines && -$pos < $fileSize) {
         $pos -= $chunkSize;
         fseek($fp, max(0, $fileSize + $pos));
@@ -152,9 +146,9 @@ log_meta_request($RAW_BODY);
  * =============== VERIFY ДЛЯ META (GET hub.*) ===============
  */
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET' && (isset($_GET['hub_verify_token']) || isset($_GET['hub.verify_token']))) {
-    $token     = $_GET['hub_verify_token'] ?? $_GET['hub.verify_token'] ?? '';
-    $challenge = $_GET['hub_challenge']    ?? $_GET['hub.challenge']    ?? '';
-    $mode      = $_GET['hub_mode']         ?? $_GET['hub.mode']         ?? '';
+    $token = $_GET['hub_verify_token'] ?? $_GET['hub.verify_token'] ?? '';
+    $challenge = $_GET['hub_challenge'] ?? $_GET['hub.challenge'] ?? '';
+    $mode = $_GET['hub_mode'] ?? $_GET['hub.mode'] ?? '';
     if ($mode === 'subscribe' || $mode === '') {
         if ($token === ($GLOBALS['VERIFY_TOKEN'] ?? '')) {
             header('Content-Type: text/plain; charset=utf-8');
@@ -172,9 +166,10 @@ if (isset($_GET['logout'])) {
     unset($_SESSION['authed']);
     respond(200, html_head('Logout') . "<body><p>Вы вышли. <a href='?view=logs'>Войти снова</a></p></body></html>");
 }
-function login_screen(string $error=''): void {
+function login_screen(string $error = ''): void
+{
     $head = html_head('Logs Login');
-    $err  = $error ? "<p style='color:#fca5a5'>{$error}</p>" : "";
+    $err = $error ? "<p style='color:#fca5a5'>{$error}</p>" : "";
     respond(200, $head . "<body>
         <h2>Доступ к логам</h2>
         {$err}
@@ -212,21 +207,30 @@ if (isset($_GET['view']) && $_GET['view'] === 'logs') {
     $lines = array_reverse($lines);
     $itemsHtml = '';
     foreach ($lines as $line) {
+
         $j = json_decode($line, true);
-        if (!$j) continue;
+        if (!$j)
+            continue;
+
+        // Если это наша компактная запись
+        if (($j['message'] ?? '') === 'META EVT' && is_array($j['ctx'] ?? null)) {
+            $itemsHtml .= render_meta_event_card($j['ctx']);
+            continue;
+        }
+
         $time = htmlspecialchars($j['time'] ?? '');
-        $ipx  = htmlspecialchars($j['ip'] ?? '');
-        $met  = htmlspecialchars($j['method'] ?? '');
-        $uri  = htmlspecialchars($j['uri'] ?? '');
-        $pretty = json_encode($j, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+        $ipx = htmlspecialchars($j['ip'] ?? '');
+        $met = htmlspecialchars($j['method'] ?? '');
+        $uri = htmlspecialchars($j['uri'] ?? '');
+        $pretty = json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $itemsHtml .= "<div class='card'>
             <div class='row'>
                 <span class='pill'>{$met}</span>
                 <span class='pill'>{$ipx}</span>
                 <span class='pill muted'>{$time}</span>
             </div>
-            <div class='muted' style='margin:8px 0'>".htmlspecialchars($uri)."</div>
-            <pre><code>".htmlspecialchars($pretty)."</code></pre>
+            <div class='muted' style='margin:8px 0'>" . htmlspecialchars($uri) . "</div>
+            <pre><code>" . htmlspecialchars($pretty) . "</code></pre>
         </div>";
     }
     $head = html_head('Webhook Logs');
@@ -262,34 +266,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['status' => 'ok'], JSON_UNESCAPED_UNICODE);
 
-    wa_log_info('Webhook POST request', [
-        'ip'      => client_ip(),
-        'headers' => get_headers_safe(),
-        'get'     => $_GET,
-        'post'    => $_POST,
-        'body'    => $RAW_BODY,
-    ]   );
-    
     // Отсоединяемся от клиента
     if (function_exists('fastcgi_finish_request')) {
-        wa_log_info('FastCGI finish request');
+        //wa_log_info('FastCGI finish request');
         fastcgi_finish_request();
     } else {
-        wa_log_info('Close hook connection! PHP ob_end_flush/flush/ob_flush');
-        /*@ob_end_flush();*/ @flush(); /*@ob_flush();*/
+        //wa_log_info('Close hook connection! PHP ob_end_flush/flush/ob_flush');
+        /*@ob_end_flush();*/
+        @flush(); /*@ob_flush();*/
     }
 
     // 2) асинхронная обработка
     try {
         $fmt = format_incoming($RAW_BODY); // определит платформу, соберет текст и id
-        
-        wa_log_info('Formatted incoming', [
-            'ok'          => $fmt['ok'] ?? false,
-            'platform'   => $fmt['platform'] ?? '',
-            'sender_id'  => $fmt['sender_id'] ?? '',
-            'message_ids'=> $fmt['message_ids'] ?? [],
-            'text'       => $fmt['text'] ?? '',
-        ]);
+
+        /*wa_log_info('Formatted incoming', [
+            'ok' => $fmt['ok'] ?? false,
+            'platform' => $fmt['platform'] ?? '',
+            'sender_id' => $fmt['sender_id'] ?? '',
+            'message_ids' => $fmt['message_ids'] ?? [],
+            'text' => $fmt['text'] ?? '',
+        ]);*/
 
         // Если не настоящие входящие — выходим
         if (!($fmt['ok'] ?? false) || empty($fmt['message_ids'])) {
@@ -301,20 +298,54 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         }
 
         // Анти-loop для WhatsApp: если отправитель совпадает с номером пересылки — не эхаем
+        //так же обработка комманд с админ телефона $GLOBALS['FORWARD_TO']
         if (($fmt['platform'] ?? '') === 'whatsapp') {
             wa_log_info('Anti-loop check for WhatsApp');
-            $fromNorm = preg_replace('~\D+~','', $fmt['sender_id'] ?? '');
-            $toNorm   = preg_replace('~\D+~','', $GLOBALS['FORWARD_TO'] ?? '');
-            if ($fromNorm !== '' && $fromNorm === $toNorm) exit;
-            wa_log_info('Anti-loop check passed', [
-                'from' => $fromNorm,
-                'to'   => $toNorm,
-            ]);
+            $fromNorm = preg_replace('~\D+~', '', $fmt['sender_id'] ?? '');
+            $toNorm = preg_replace('~\D+~', '', $GLOBALS['FORWARD_TO'] ?? '');
+            if ($fromNorm !== '' && $fromNorm === $toNorm) {
+                // ПЕРЕД exit обрабатываем «обратное» сообщение с кодом
+                try {
+                    wa_log_info('Anti-loop check passed, handling own message code', [
+                        'from' => $fromNorm,
+                        'to' => $toNorm,
+                    ]);
+                    // ===== Own-command (короткий дебаг) =====
+                    wa_log_info('OWNCMD start: text="' . $fmt['text'] ?? '');
+
+                    $cmd = wa_bot_handle_own_message_code($fmt, $RAW_BODY);
+                    wa_log_info(
+                        'OWNCMD parsed: ok=' . (int) ($cmd['ok'] ?? 0) .
+                        ' code=' . ($cmd['code'] ?? '') .
+                        ' num=' . (int) ($cmd['command_num'] ?? 0) .
+                        ' key=' . (string) ($cmd['command_key'] ?? '') .
+                        ' has_text=' . (int) ($cmd['has_text'] ?? 0)
+                    );
+
+                    if (!empty($cmd['ok'])) {
+                        $result = wa_bot_process_own_command($cmd);
+                        wa_log_info(
+                            'OWNCMD done: sent=' . (int) ($result['sent'] ?? 0) .
+                            ' ok=' . (int) ($result['ok'] ?? 0) .
+                            ' http=' . (string) ($result['http_code'] ?? 'null') .
+                            ' err=' . (string) ($result['error'] ?? '')
+                        );
+                    } else {
+                        wa_log_info('OWNCMD skip (no valid command)');
+                    }
+                } catch (Throwable $e) {
+                    wa_log_error('own-message-code handler failed', ['err' => $e->getMessage()]);
+                }
+                exit;
+            }
+            // ...
         }
 
+        /* 
         wa_log_info('Formatted text', [
-            'text' => $fmt['text'] ?? '',
-        ]);
+             'text' => $fmt['text'] ?? '',
+         ]);
+         */
 
         // Пересылка на ваш WhatsApp
         $ok = forward_with_fallback(
@@ -323,24 +354,33 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $GLOBALS['ACCESS_TOKEN'],
             $GLOBALS['FORWARD_TO'],
             $fmt['text'],
-            $GLOBALS['TEMPLATE_NAME'], // шаблон на случай 24h окна
-            $GLOBALS['TEMPLATE_LANG']
+            $GLOBALS['TEMPLATE_NAME'],
+            $GLOBALS['TEMPLATE_LANG'],
+            $fmt['sender_id']              // <-- вот это добавили
         );
+
+        wa_log_info('FORWARD ctx', [
+            'from' => $fmt['sender_id'] ?? '',
+            'to' => $GLOBALS['FORWARD_TO'] ?? '',
+        ]);
+
         if (!$ok) {
             wa_log_error('forward_with_fallback failed', [
-                'reason'   => 'forward_with_fallback failed',
+                'reason' => 'forward_with_fallback failed',
                 'platform' => $fmt['platform'] ?? '',
             ]);
         } else {
+            /*
             wa_log_info('Message forwarded successfully', [
                 'platform' => $fmt['platform'] ?? '',
-                'to'       => $GLOBALS['FORWARD_TO'],
+                'to' => $GLOBALS['FORWARD_TO'],
             ]);
+            */
         }
     } catch (Throwable $e) {
         wa_log_error('Exception in webhook processing', [
             'exception' => $e->getMessage(),
-            'trace'     => $e->getTraceAsString(),
+            'trace' => $e->getTraceAsString(),
         ]);
     }
     exit;

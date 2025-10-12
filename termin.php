@@ -87,17 +87,14 @@
 
                                 <div id="upload-progress" style="display:none; margin-top:10px;">
                                     <div style="background:#f0f0f0; border-radius:5px; overflow:hidden; height:20px;">
-                                        <div id="upload-progress-bar" style="background:#4caf50; width:0%; height:100%;"></div>
+                                        <div id="upload-progress-bar"
+                                            style="background:#4caf50; width:0%; height:100%;"></div>
                                     </div>
                                     <div id="upload-progress-text" style="margin-top:5px; font-size:14px;">0%</div>
                                 </div>
-                                <!--<div id="short-link"></div>-->
                                 <div id="short-link" style="display:none;"></div>
                             </div>
 
-
-                            <!--<div class="row">-->
-                            <!--<div class="form-group col-6">-->
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="datenschutz_checkbox"
                                     id="datenschutz">
@@ -106,19 +103,6 @@
                                     gelesen und akzeptiere sie.
                                 </label>
                             </div>
-                            <!--</div>-->
-                            <!--
-                                <div class="form-group col-6">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="agb_checkbox" id="agb">
-                                        <label class="form-check-label" for="agb">
-                                            Ich habe die <a href="/agb" target="_blank">AGB</a> gelesen und
-                                            akzeptiere sie.
-                                        </label>
-                                    </div>
-                                </div>
-                                -->
-                            <!--</div>-->
 
                             <div style="display:none;">
                                 <label>Bitte dieses Feld leer lassen: <input type="text" name="smallinfo"></label>
@@ -127,362 +111,87 @@
                         </div>
 
                         <a id="whatsapp-send-btn" class="btn btn-black" role="button">Absenden</a>
-                        <!-- JavaScript for form validation and WhatsApp message generation -->
 
-                        <!--
                         <script>
-                            let initialLoad = true;
-                            let buttonPressed = false;
-                            let waPhotoLinks = [];
+                            
+                            (function () {
+                                // Ждём DOM
+                                document.addEventListener('DOMContentLoaded', function () {
+                                    const formEl = document.querySelector('form.gform.pure-form.pure-form-stacked');
+                                    const sendBtn = document.getElementById('whatsapp-send-btn');
+                                    if (!formEl || !sendBtn) return;
 
-                            document.addEventListener("DOMContentLoaded", function () {
+                                    // Чтобы не слать дубли при многокликах
+                                    let sentOnce = false;
 
-                                const fieldLimits = {
-                                    name: 50,
-                                    nachname: 50,
-                                    telefon: 30,
-                                    email: 80,
-                                    message_from_user: 1400,
-                                    body_position_user_message: 300,
-                                    pref_time_for_appointment: 300,
-                                    quelle: 300
-                                };
+                                    async function sendToGAS() {
+                                        try {
+                                            if (sentOnce) return;
+                                            sentOnce = true;
 
-                                const minLengthRequired = {
-                                    name: 2,
-                                    nachname: 2,
-                                    telefon: 5,
-                                    email: 5,
-                                    message_from_user: 15,
-                                    body_position_user_message: 5,
-                                    pref_time_for_appointment: 10,
-                                    quelle: 0
-                                };
+                                            // Собираем FormData прямо из формы
+                                            const fd = new FormData(formEl);
 
-                                const minLengthErrorMessages = {
-                                    name: ` Bitte gib mindestens ${minLengthRequired.name} Zeichen für den Vornamen ein.`,
-                                    nachname: ` Bitte gib mindestens ${minLengthRequired.nachname} Zeichen für den Nachnamen ein.`,
-                                    telefon: ` Bitte gib eine gültige Telefonnummer mit mindestens ${minLengthRequired.telefon} Zeichen ein.`,
-                                    email: ` Bitte gib eine gültige E-Mail-Adresse mit mindestens ${minLengthRequired.email} Zeichen ein.`,
-                                    message_from_user: ` Bitte beschreibe dein Tattoo-Vorhaben in mindestens ${minLengthRequired.message_from_user} Zeichen.`,
-                                    body_position_user_message: ` Bitte gib an, wo auf dem Körper das Tattoo platziert werden soll (mind. ${minLengthRequired.body_position_user_message} Zeichen).`,
-                                    pref_time_for_appointment: ` Bitte teile uns deinen bevorzugten Zeitraum mit (mind. ${minLengthRequired.pref_time_for_appointment} Zeichen).`,
-                                    quelle: ` Bitte teile uns mit, wie du uns gefunden hast (optional).`
-                                };
+                                            // Добиваем полезной мета-информацией
+                                            fd.append('client_ts_iso', new Date().toISOString());
+                                            fd.append('page_url', location.href);
+                                            fd.append('page_referrer', document.referrer || '');
+                                            fd.append('user_agent', navigator.userAgent || '');
 
-                                const formatErrorMessages = {
-                                    email: " Bitte gib eine gültige E-Mail-Adresse im richtigen Format ein (z. B. name@example.com).",
-                                    telefon: " Bitte gib eine gültige Telefonnummer ein (nur Zahlen, +, -, Leerzeichen erlaubt, mind. 5 Zeichen)."
-                                };
-
-                                const dataRegex = {
-                                    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                                    telefon: /^[+0-9\s\-()]{5,}$/
-                                };
-
-
-                                const maxTotalLength = 4096;
-                                const whatsappBtn = document.getElementById("whatsapp-send-btn");
-
-                                /*const totalCounter = document.createElement("div");
-                                totalCounter.id = "currentTotal";
-                                totalCounter.style.fontSize = "13px";
-                                totalCounter.style.marginTop = "10px";
-                                totalCounter.innerHTML = "Gesamtlänge der WhatsApp-Nachricht: <span class='counter'>0</span> / 4096 Zeichen";*/
-
-
-                                function scrollToFirstErrorField() {
-                                    const firstError = document.querySelector(".field-error");
-                                    if (firstError) {
-                                        firstError.scrollIntoView({
-                                            behavior: "smooth",
-                                            block: "center"
-                                        });
-                                        firstError.focus();
-                                    }
-                                }
-
-                                function updateAll(showErrors = false) {
-                                    let totalLength = 0;
-                                    let hasError = false;
-
-                                    // Считаем длину всех текстовых полей
-                                    for (let name in fieldLimits) {
-                                        const input = document.querySelector(`[name="${name}"]`);
-                                        const inputValue = input ? input.value.trim() : ""; // удаляем пробелы по краям
-                                        const counter = document.querySelector(`.char-counter[data-for="${name}"]`);
-                                        if (!input || !counter)
-                                            continue;
-
-                                        const val = input.value.trim();
-                                        const len = val.length;
-                                        const max = fieldLimits[name];
-                                        const under = input.required && len < minLengthRequired[name];
-                                        const over = len > max;
-                                        let shouldWarn = buttonPressed && !initialLoad && (over || under);
-
-                                        counter.textContent = `${len} / ${max}`;
-
-                                        if (input && max) {
-                                            const currentLength = input.value.length;
-                                            let counterText = counter.textContent;
-
-                                            if (currentLength > max) {
-                                                hasError = true;
-                                                shouldWarn = true;
-                                            } else if (counter && buttonPressed && len < minLengthRequired[name]) {
-                                                hasError = true;
-                                                counterText += minLengthErrorMessages[name];
-                                                shouldWarn = true;
-                                            } else if (buttonPressed && formatErrorMessages.hasOwnProperty(name) && inputValue && dataRegex.hasOwnProperty(name) && !dataRegex[name].test(inputValue)) {
-                                                hasError = true;
-                                                counterText += formatErrorMessages[name];
-                                                shouldWarn = true;
+                                            // Приложим ссылки на загруженные изображения (если есть)
+                                            // waPhotoLinks берём из вашего глобального скрипта
+                                            if (Array.isArray(window.waPhotoLinks) && window.waPhotoLinks.length) {
+                                                // как человеко-читаемый список
+                                                fd.append('wa_photo_links_text', window.waPhotoLinks.join('\n'));
+                                                // как JSON (на случай парсинга на стороне Apps Script)
+                                                fd.append('wa_photo_links_json', JSON.stringify(window.waPhotoLinks));
+                                            } else {
+                                                fd.append('wa_photo_links_text', '');
                                             }
 
-                                            counter.textContent = counterText;
-                                        }
-
-                                        counter.classList.toggle("over", shouldWarn);
-
-                                        if (shouldWarn) {
-                                            input.classList.add("field-error");
-                                            input.setAttribute("title", over ? `Maximal ${max} Zeichen erlaubt.` : `Mindestens ${minLengthRequired[name]} Zeichen erforderlich.`);
-                                            hasError = true;
-                                        } else {
-                                            input.classList.remove("field-error");
-                                            input.removeAttribute("title");
-                                        }
-
-                                        totalLength += len;
-                                    }
-
-                                    // Учитываем длину ссылок на файлы в итоговом сообщении
-                                    if (waPhotoLinks.length > 0) {
-                                        totalLength += "\n\nHier sind deine hochgeladenen Bilder:\n".length;
-                                        totalLength += waPhotoLinks.map(link => link.length + 1).reduce((a, b) => a + b, -1);
-                                    } else {
-                                        totalLength += "\n\nKeine Bilder hochgeladen.".length;
-                                    }
-
-                                    /*const globalCounter = totalCounter.querySelector(".counter");
-                                    globalCounter.textContent = totalLength;
-                                    const totalOver = totalLength > maxTotalLength;
-                                    globalCounter.classList.toggle("red", totalOver);
-
-                                    if (totalOver) {
-                                        hasError = true;
-                                        totalCounter.setAttribute("title", `Gesamtlänge überschreitet ${maxTotalLength} Zeichen.`);
-                                    } else {
-                                        totalCounter.removeAttribute("title");
-                                    }*/
-
-                                    //check datenschutz checkbox
-                                    const datenschutz = document.querySelector('[name="datenschutz_checkbox"]');
-                                    /*const agb = document.querySelector('[name="agb_checkbox"]');*/
-
-                                    const datenschutzLabel = document.querySelector('label[for="datenschutz"]');
-                                    /*const agbLabel = document.querySelector('label[for="agb"]');*/
-
-                                    if (!initialLoad && buttonPressed) {
-                                        if (datenschutz && !datenschutz.checked) {
-                                            hasError = true;
-                                            if (datenschutzLabel) {
-                                                datenschutzLabel.classList.add("field-error");
-                                                datenschutzLabel.setAttribute("title", "Bitte akzeptiere die Datenschutzerklärung.");
-                                            }
-                                        } else if (datenschutzLabel) {
-                                            datenschutzLabel.classList.remove("field-error");
-                                            datenschutzLabel.removeAttribute("title");
-                                        }
-
-                                        /*if (agb && !agb.checked) {
-                                            hasError = true;
-                                            if (agbLabel) {
-                                                agbLabel.classList.add("field-error");
-                                                agbLabel.setAttribute("title", "Bitte akzeptiere die AGB.");
-                                            }
-                                        } else if (agbLabel) {
-                                            agbLabel.classList.remove("field-error");
-                                            agbLabel.removeAttribute("title");
-                                        }*/
-                                    }
-
-                                    if (whatsappBtn) {
-                                        whatsappBtn.classList.toggle("disabled", hasError);
-                                        whatsappBtn.style.pointerEvents = hasError ? "none" : "auto";
-                                        whatsappBtn.style.opacity = hasError ? "0.5" : "1";
-                                    }
-
-                                    if (hasError && showErrors) {
-                                        scrollToFirstErrorField();
-                                    }
-
-                                    return !hasError;
-                                }
-
-                                // Слушатели для всех полей
-                                for (let name in fieldLimits) {
-                                    const input = document.querySelector(`[name="${name}"]`);
-                                    if (input) {
-                                        input.addEventListener("input", function () {
-                                            updateAll(false);
-                                        });
-                                    }
-                                }
-                                const checkBox = document.querySelector('input[name="datenschutz_checkbox"]');
-                                if (checkBox) {
-                                    checkBox.addEventListener("input", function () {
-                                        updateAll(false);
-                                    });
-                                }
-                                /*const checkBoxAGB = document.querySelector('input[name="agb_checkbox"]');
-                                if (checkBoxAGB) {
-                                    checkBoxAGB.addEventListener("input", function () {
-                                        updateAll(false);
-                                    });
-                                }*/
-
-                                // Слушатель для загрузки изображений
-                                const imageInput = document.getElementById('image-upload');
-                                if (imageInput) {
-                                    imageInput.addEventListener('change', async function () {
-                                        waPhotoLinks = [];
-                                        document.getElementById('short-link').innerHTML = '';
-                                        const files = Array.from(this.files).slice(0, 10); // максимум 10 файлов
-                                        for (let i = 0; i < files.length; i++) {
-                                            const file = files[i];
-                                            const formData = new FormData();
-                                            formData.append('image', file);
+                                            // Снимок локального кеша (по желанию — удобно для диагностики)
                                             try {
-                                                const res = await fetch('upload.php', { method: 'POST', body: formData });
-                                                const data = await res.json();
-                                                if (data.url) {
-                                                    waPhotoLinks.push(`Bild Nummer ${i + 1}: ${data.url}`);
-                                                    const a = document.createElement('a');
-                                                    a.href = data.url;
-                                                    a.target = '_blank';
-                                                    a.textContent = data.url;
-                                                    document.getElementById('short-link').appendChild(a);
-                                                    document.getElementById('short-link').appendChild(document.createElement('br'));
-                                                } else {
-                                                    alert('Fehler beim Upload');
-                                                }
-                                            } catch (e) {
-                                                alert('Fehler beim Upload');
+                                                const rawCache = localStorage.getItem('tattooFormData_v1');
+                                                if (rawCache) fd.append('client_cache_snapshot', rawCache);
+                                            } catch (_) { }
+
+                                            // Если в форме есть honeypot smallinfo — оставим пустым
+                                            if (!fd.has('smallinfo')) fd.append('smallinfo', '');
+
+                                            // Отправка. 'no-cors' + 'keepalive' даст «надёжный выстрел» даже при мгновенном редиректе
+                                            const actionUrl = formEl.getAttribute('action');
+                                            if (actionUrl) {
+                                                fetch(actionUrl, {
+                                                    method: 'POST',
+                                                    body: fd,
+                                                    mode: 'no-cors',
+                                                    keepalive: true,
+                                                }).catch(() => { }); // намеренно глушим сетевые ошибки (opaque ответ в no-cors)
                                             }
+                                        } catch (e) {
+                                            // Ничего не ломаем в UX
+                                            // console.warn('GAS pre-send failed:', e);
                                         }
-                                        updateAll(false); // обновить счетчик после загрузки файлов
+                                    }
+
+                                    // 1) Главный триггер — клик по кнопке в capture-фазе (сработает ПЕРВЫМ)
+                                    sendBtn.addEventListener('click', function () {
+                                        // Не мешаем вашей логике, просто запускаем отправку
+                                        sendToGAS();
+                                    }, true); // <-- capture
+
+                                    // 2) Подстраховка: если вдруг будет прямой submit формы — перехватим и туда
+                                    formEl.addEventListener('submit', function () {
+                                        sendToGAS();
+                                    }, true); // capture
+
+                                    // 3) Доп. подстраховка при закрытии/редиректе страницы
+                                    window.addEventListener('pagehide', function () {
+                                        sendToGAS();
                                     });
-                                }
-
-                                // Слушатель для кнопки WhatsApp
-                                /*if (whatsappBtn) {
-                                    whatsappBtn.addEventListener("click", function (e) {
-                                        buttonPressed = true;
-                                        e.preventDefault();
-                                        const valid = updateAll(true);
-                                        if (!valid)
-                                            return;
-
-                                        const values = {};
-                                        for (let name in fieldLimits) {
-                                            const input = document.querySelector(`[name="${name}"]`);
-                                            values[name] = input ? input.value.trim() : "";
-                                        }
-
-                                        let message =
-                                            `Tattoo-Anfrage:\n\n` +
-                                            `Name: ${values.name} ${values.nachname}\n` +
-                                            `Telefon (WhatsApp): ${values.telefon}\n` +
-                                            `E-Mail: ${values.email}\n\n` +
-                                            `Tattoo-Idee: ${values.message_from_user}\n` +
-                                            `Größe / Stelle: ${values.body_position_user_message}\n\n` +
-                                            `Bevorzugte Zeit für Termin: ${values.pref_time_for_appointment}\n` +
-                                            `Gefunden über: ${values.quelle}`;
-
-                                        if (waPhotoLinks.length > 0) {
-                                            message += `\n\nHier sind deine hochgeladenen Bilder:\n${waPhotoLinks.join('\n')}`;
-                                        } else {
-                                            message += `\n\nKeine Bilder hochgeladen.`;
-                                        }
-
-                                        const encodedMsg = encodeURIComponent(message);
-                                        const phone = "4917632565824"; // Замените на нужный номер
-                                        const url = `https://wa.me/${phone}?text=${encodedMsg}`;
-                                        window.open(url, '_blank');
-                                    });
-                                }*/
-
-                                if (whatsappBtn) {
-                                    whatsappBtn.addEventListener("click", function (e) {
-                                        buttonPressed = true;
-                                        e.preventDefault();
-
-                                        // 1) Валидируем все поля
-                                        const valid = updateAll(true);
-                                        if (!valid) return;
-
-                                        // 2) Если фото не загружены — спросим, хочет ли пользователь продолжить без них
-                                        if (waPhotoLinks.length === 0) {
-                                            const proceed = window.confirm(
-                                                "Möchtest du wirklich ohne Bildbeispiele fortfahren?\n\n" +
-                                                "Bild-Referenzen sind für uns sehr wichtig: Sie helfen, Stil, Größe und Details " +
-                                                "genau zu verstehen und verkürzen die Abstimmung.\n\n" +
-                                                "• OK – ohne Bilder fortfahren\n" +
-                                                "• Abbrechen – zurück, um Bilder hinzuzufügen"
-                                            );
-                                            if (!proceed) {
-                                                const imageInput = document.getElementById('image-upload');
-                                                if (imageInput) {
-                                                    imageInput.scrollIntoView({ behavior: "smooth", block: "center" });
-                                                    imageInput.focus();
-                                                }
-                                                return; // пользователь решил вернуться и добавить фото
-                                            }
-                                        }
-
-                                        // 3) Собираем значения полей и формируем сообщение
-                                        const values = {};
-                                        for (let name in fieldLimits) {
-                                            const input = document.querySelector(`[name="${name}"]`);
-                                            values[name] = input ? input.value.trim() : "";
-                                        }
-
-                                        let message =
-                                            `Tattoo-Anfrage:\n\n` +
-                                            `Name: ${values.name} ${values.nachname}\n` +
-                                            `Telefon (WhatsApp): ${values.telefon}\n` +
-                                            `E-Mail: ${values.email}\n\n` +
-                                            `Tattoo-Idee: ${values.message_from_user}\n` +
-                                            `Größe / Stelle: ${values.body_position_user_message}\n\n` +
-                                            `Bevorzugte Zeit für Termin: ${values.pref_time_for_appointment}\n` +
-                                            `Gefunden über: ${values.quelle}`;
-
-                                        if (waPhotoLinks.length > 0) {
-                                            message += `\n\nHier sind deine hochgeladenen Bilder:\n${waPhotoLinks.join('\n')}`;
-                                        } else {
-                                            message += `\n\nKeine Bilder hochgeladen.`;
-                                        }
-
-                                        const encodedMsg = encodeURIComponent(message);
-                                        const phone = "4917632565824"; // <-- замени на нужный номер
-                                        const url = `https://wa.me/${phone}?text=${encodedMsg}`;
-                                        window.open(url, '_blank');
-                                    });
-                                }
-
-                                /*// Добавить счетчик символов к форме
-                                const formElements = document.querySelector('.form-elements');
-                                if (formElements && !document.getElementById("currentTotal")) {
-                                    formElements.appendChild(totalCounter);
-                                }*/
-
-                                updateAll(false);
-                                initialLoad = false;
-                            });
+                                });
+                            })();
                         </script>
-
 
                         <!-- JavaScript for form validation, persistence and WhatsApp message generation -->
                         <script>
@@ -565,7 +274,7 @@
                                 try {
                                     const raw = localStorage.getItem(STORAGE_KEY);
                                     if (raw) data = JSON.parse(raw);
-                                } catch (e) {}
+                                } catch (e) { }
 
                                 // 2) Если нет — пробуем cookie (частичные данные)
                                 if (!data) {
@@ -590,7 +299,7 @@
                                                 photos: []
                                             };
                                         }
-                                    } catch (e) {}
+                                    } catch (e) { }
                                 }
 
                                 if (!data) return; // нечего восстанавливать
@@ -612,55 +321,13 @@
                             // Debounce для сохранения
                             function debounce(fn, wait) {
                                 let t;
-                                return function(...args) {
+                                return function (...args) {
                                     clearTimeout(t);
                                     t = setTimeout(() => fn.apply(this, args), wait);
                                 }
                             }
 
-                            /*let __gtagSuspendCount = 0;
-                            let __gtagQueue = [];
-                            let __gtagOriginal = null;
-
-                            function suspendGtag() {
-                                if (typeof gtag !== 'function' || window.__gtagSuspended) {
-                                    __gtagSuspendCount++;
-                                    return;
-                                }
-                                __gtagSuspendCount = 1;
-                                window.__gtagSuspended = true;
-                                __gtagOriginal = gtag;
-                                window.gtag = function() {
-                                    __gtagQueue.push(arguments);
-                                }; // глушим/копим
-                            }*/
-
-                            /*function resumeGtag() {
-                                if (__gtagSuspendCount > 0) __gtagSuspendCount--;
-                                if (!window.__gtagSuspended || __gtagSuspendCount > 0) return;
-
-                                // восстанавливаем оригинал
-                                window.gtag = __gtagOriginal;
-                                __gtagOriginal = null;
-                                window.__gtagSuspended = false;
-
-                                // по желанию: проиграть накопленные вызовы (или очистить очередь)
-                                if (typeof gtag === 'function' && __gtagQueue.length) {
-                                    // маленькая задержка, чтобы не забить сеть
-                                    setTimeout(() => {
-                                        for (const args of __gtagQueue) {
-                                            try {
-                                                gtag.apply(null, args);
-                                            } catch (e) {}
-                                        }
-                                        __gtagQueue = [];
-                                    }, 200);
-                                } else {
-                                    __gtagQueue = [];
-                                }
-                            }*/
-
-                            document.addEventListener("DOMContentLoaded", function() {
+                            document.addEventListener("DOMContentLoaded", function () {
 
                                 const fieldLimits = {
                                     name: 50,
@@ -836,7 +503,7 @@
                                 for (let name in fieldLimits) {
                                     const input = document.querySelector(`[name="${name}"]`);
                                     if (input) {
-                                        input.addEventListener("input", function() {
+                                        input.addEventListener("input", function () {
                                             updateAll(false);
                                             debouncedSave();
                                         });
@@ -844,7 +511,7 @@
                                 }
                                 const checkBox = document.querySelector('input[name="datenschutz_checkbox"]');
                                 if (checkBox) {
-                                    checkBox.addEventListener("input", function() {
+                                    checkBox.addEventListener("input", function () {
                                         updateAll(false);
                                         debouncedSave();
                                     });
@@ -853,10 +520,10 @@
                                 // Слушатель для загрузки изображений
                                 const imageInput = document.getElementById('image-upload');
                                 if (imageInput) {
-                                    imageInput.addEventListener('change', async function() {
+                                    imageInput.addEventListener('change', async function () {
                                         /*suspendGtag();*/
                                         const sendBtn = document.getElementById('whatsapp-send-btn');
-                                        
+
                                         // Делаем кнопку неактивной на время загрузки
                                         if (sendBtn) {
                                             sendBtn.disabled = true;
@@ -897,7 +564,7 @@
                                                         }
                                                     });
 
-                                                    xhr.onload = function() {
+                                                    xhr.onload = function () {
                                                         if (xhr.status === 200) {
                                                             try {
                                                                 const data = JSON.parse(xhr.responseText);
@@ -955,7 +622,7 @@
 
                                 // Слушатель для кнопки WhatsApp (с подтверждением, если без фото)
                                 if (whatsappBtn) {
-                                    whatsappBtn.addEventListener("click", function(e) {
+                                    whatsappBtn.addEventListener("click", function (e) {
                                         buttonPressed = true;
                                         e.preventDefault();
 
@@ -1020,7 +687,7 @@
                                             localStorage.removeItem(STORAGE_KEY);
                                         }
 
-                                        setTimeout(function() {
+                                        setTimeout(function () {
                                             window.location.href = "terminThankYou.php";
                                         }, 250);
                                     });
@@ -1035,6 +702,9 @@
                                 initialLoad = false;
                             });
                         </script>
+
+                        
+
 
                     </form>
                 </div>
