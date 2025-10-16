@@ -26,6 +26,18 @@
     href="https://fonts.googleapis.com/css2?family=Oswald:wght@200;300;400;500;600;700&family=Raleway:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Rozha+One&display=swap"
     rel="stylesheet">
 
+  <!-- Favicon & App Icons -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/icons/favicon-16x16.png">
+  <link rel="shortcut icon" href="/images/icons/favicon.ico">
+  <link rel="manifest" href="/images/icons/site.webmanifest">
+  <link rel="mask-icon" href="/images/icons/safari-pinned-tab.svg" color="#111111">
+  <meta name="msapplication-TileColor" content="#111111">
+  <meta name="msapplication-TileImage" content="/images/icons/mstile-150x150.png">
+  <meta name="msapplication-config" content="/images/icons/browserconfig.xml">
+  <meta name="theme-color" content="#111111">
+
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -74,7 +86,14 @@
     }
   </script>
 
-<!-- Google tag (gtag.js) --> 
-<script async src="https://www.googletagmanager.com/gtag/js?id=AW-10973944384"></script>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-10973944384"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'AW-10973944384');
+  </script>
 
 </head>

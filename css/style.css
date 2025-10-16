@@ -1984,10 +1984,48 @@ input[type="checkbox"] {
   cursor: pointer;
 }
 
-@media screen and (max-width: 1001px) {
+@media screen and (max-width: 768px) {
   .billboard-bg-img {
     background-position: 37% !important;
-    /*background-image: url('../images/background/bannerMobile.jpg') !important;*/
+    background-image: url('../images/background/bannerMobile.jpg') !important;
+  }
+}
+
+@media (max-width: 768px) and (min-width: 450px) {
+  .billboard-bg-img {
+    background-image: url('../images/background/bannerMobile.jpg') !important;
+
+    /* Плавный сдвиг вниз, который начинается с 450px */
+    --shiftY: clamp(0px, calc(100vw - 450px), 150px);
+
+    /* Применяем динамическое смещение */
+    background-position: 50% calc(50% + var(--shiftY)) !important;
+
+  }
+}
+
+@media (max-width: 768px) and (min-width: 680px) {
+  .billboard-bg-img {
+    background-image: url('../images/background/bannerMobile.jpg') !important;
+
+    /* Плавный сдвиг вниз, который начинается с 450px */
+    --shiftY: clamp(0px, calc(100vw - 450px), 180px);
+
+    /* Применяем динамическое смещение */
+    background-position: 50% calc(50% + var(--shiftY)) !important;
+
+  }
+}
+
+@media (max-width: 2200px) and (min-width: 1000px) {
+  .billboard-bg-img {
+
+    /* Плавный сдвиг вниз, который начинается с 450px */
+    --shiftY: clamp(0px, calc(100vw - 1000px), 80px);
+
+    /* Применяем динамическое смещение */
+    background-position: 50% calc(50% + var(--shiftY)) !important;
+
   }
 }
 
@@ -2133,13 +2171,16 @@ input[type="checkbox"] {
   }
 }
 
-html, body {
+html,
+body {
   max-width: 100%;
-  overflow-x: hidden;   /* отключаем горизонтальную прокрутку как fallback */
+  overflow-x: hidden;
+  /* отключаем горизонтальную прокрутку как fallback */
 }
 
 /* Длинные заголовки не ломают вёрстку на мобилке */
 @media (max-width: 600px) {
+
   .sec-title h1,
   .sec-title-termin h1 {
     overflow-wrap: anywhere;
@@ -2147,48 +2188,47 @@ html, body {
   }
 }
 
-
 /* Десктоп: изначально фиксированный */
 .header-wrap {
-    position: fixed !important;
-    top: 0 !important;
-    transition: top 0.3s ease !important;
+  position: fixed !important;
+  top: 0 !important;
+  transition: top 0.3s ease !important;
 }
 
 
- /*Класс, который прячет хедер вверх */
+/*Класс, который прячет хедер вверх */
 .header-wrap.is-hidden {
-    top: -148px !important;
+  top: -148px !important;
 }
-
-
-/* === END: page-specific styles === */
-
-/*.header-wrap {
-    width: 100% !important;
-    z-index: 999 !important;
-}*/
 
 /* резервируем место под хедер */
-.header-wrap + * {
-    margin-top: 148px; /* высота header-wrap */
+.header-wrap+* {
+  margin-top: 148px;
+  /* высота header-wrap */
 }
 
 @media (max-width: 1060px) {
-    /* резервируем место под хедер только на узких экранах */
-    .header-wrap + * {
-        margin-top: 0px; /* подставь фактическую высоту header-wrap на мобилке */
-    }
+
+  /* резервируем место под хедер только на узких экранах */
+  .header-wrap+* {
+    margin-top: 0px;
+    /* подставь фактическую высоту header-wrap на мобилке */
+  }
 }
 
-.text-lightgray { color: #bbb; }
+.text-lightgray {
+  color: #bbb;
+}
 
-.ti-value { color: #111 !important; }
+.ti-value {
+  color: #111 !important;
+}
 
 /* тёмно-серый для всего внутри .ti-header-numbers */
 .ti-header-numbers,
 .ti-header-numbers * {
-  color: #2b2b2b !important; /* можно #333, если нужно чуть светлее */
+  color: #2b2b2b !important;
+  /* можно #333, если нужно чуть светлее */
 }
 
 /* если есть иконки */
@@ -2200,7 +2240,8 @@ html, body {
   background-color: #000 !important;
   color: #fff !important;
   border: 1px solid #000 !important;
-  background-image: none !important; /* на случай градиентов */
+  background-image: none !important;
+  /* на случай градиентов */
 }
 
 .ti-btn:hover,
@@ -2216,4 +2257,6 @@ html, body {
 }
 
 /* если внутри есть иконки */
-.ti-btn svg { fill: currentColor; }
+.ti-btn svg {
+  fill: currentColor;
+}
